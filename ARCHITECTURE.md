@@ -51,7 +51,9 @@ rule can introduce its own reason without touching a shared type.
 
 Current rules (`Domain/Rules`):
 
-- `StateIsNewYorkRule` — denies when `State == "NY"`.
+- `RestrictedStateRule` — denies when the state is in `IRestrictedStates`, implemented by
+  `ConfigurationRestrictedStates` (reads `EligibilityRules:RestrictedStates` from
+  configuration; defaults to `["NY"]`, case-insensitive).
 - `BlacklistedSsnRule` — denies when the SSN is in `IBlacklist`, implemented by
   `ConfigurationBlacklist` (reads `Blacklist:Ssns` from configuration).
 

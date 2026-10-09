@@ -1,8 +1,10 @@
 using Application.Abstractions;
 using Application.UseCases;
 using Domain.Blacklist;
+using Domain.RestrictedStates;
 using Domain.Rules;
 using Infrastructure.Blacklist;
+using Infrastructure.RestrictedStates;
 using Infrastructure.ExternalService;
 using Infrastructure.Outbox;
 using Infrastructure.Persistence;
@@ -35,8 +37,9 @@ builder.Services.AddScoped<ILoanApplicationRepository, LoanApplicationRepository
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 builder.Services.AddScoped<IOutboxWriter, OutboxWriter>();
 builder.Services.AddSingleton<IBlacklist, ConfigurationBlacklist>();
+builder.Services.AddSingleton<IRestrictedStates, ConfigurationRestrictedStates>();
 
-builder.Services.AddScoped<IDenyRule, StateIsNewYorkRule>();
+builder.Services.AddScoped<IDenyRule, RestrictedStateRule>();
 builder.Services.AddScoped<IDenyRule, BlacklistedSsnRule>();
 builder.Services.AddScoped<LoanRuleEngine>();
 
