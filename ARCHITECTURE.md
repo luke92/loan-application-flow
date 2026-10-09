@@ -6,18 +6,22 @@
 backend/
   src/
     Domain/          Entities (Customer, LoanApplication), the rule engine + rules,
-                      the blacklist abstraction, the request/decision value types.
-                      No dependency on anything else in the solution.
+                      the blacklist / restricted-states abstractions, the US state
+                      map, SSN helpers, the request/decision value types. No
+                      dependency on anything else in the solution.
     Application/      The use case (SubmitLoanApplicationHandler) and the interfaces
                       it depends on (repositories, outbox writer, unit of work,
-                      external service). Depends only on Domain.
+                      external service), plus AddApplication() (rules, engine,
+                      handler registration). Depends only on Domain.
     Infrastructure/   EF Core DbContext, repositories, the outbox table + its
                       BackgroundService processor, the HTTP client that calls the
-                      external service, the config-backed blacklist. Depends on
-                      Domain + Application, implements their interfaces.
+                      external service, the config-backed blacklist and
+                      restricted states, plus AddInfrastructure() (DbContext, repos,
+                      outbox, HTTP client). Depends on Domain + Application,
+                      implements their interfaces.
     Api/              ASP.NET Core host: a thin controller, request/response DTOs,
-                      and Program.cs (the composition root — DI wiring, CORS, the
-                      global error handler).
+                      and Program.cs (the composition root — calls AddApplication() /
+                      AddInfrastructure(), CORS, the global error handler).
   tests/
     Domain.Tests/         Rule engine unit tests.
     Application.Tests/    Use case unit tests, against in-memory fakes.
@@ -26,12 +30,14 @@ backend/
 frontend/              Next.js App Router: the form, /success, /denied.
 mock-external-service/ Express app simulating the partner HTTP service.
 docker-compose.yml     One-command run of all three, containerized (see README).
-run.sh                 One-command run of all three, no containers (see README).
+run.sh / run.ps1       One-command run of all three, no containers (bash / Windows
+                       PowerShell; see README).
 ```
 
 Dependencies point inward (Api → Application → Domain, Infrastructure →
 Application + Domain). Domain has no package references at all; Application only
-references Domain. Nothing in Domain or Application knows EF Core, ASP.NET Core, or
+references Domain (plus the DI abstractions package, for AddApplication()). Nothing
+in Domain or Application knows EF Core, ASP.NET Core, or
 HTTP exist.
 
 ## The rule engine
@@ -44,7 +50,7 @@ public interface IDenyRule
 ```
 
 `LoanRuleEngine` takes `IEnumerable<IDenyRule>` through its constructor (resolved by
-DI from every `IDenyRule` registered in `Program.cs`), runs them in registration
+DI from every `IDenyRule` registered in `AddApplication()`), runs them in registration
 order, and returns the first non-null `DenyReason` — or an approved `LoanDecision` if
 none fire. `DenyReason` is a `(Code, Message)` record, not a closed enum, so a new
 rule can introduce its own reason without touching a shared type.
@@ -57,14 +63,30 @@ Current rules (`Domain/Rules`):
 - `BlacklistedSsnRule` — denies when the SSN is in `IBlacklist`, implemented by
   `ConfigurationBlacklist` (reads `Blacklist:Ssns` from configuration).
 
+Both read typed options (`BlacklistOptions`, `EligibilityRulesOptions`) validated on
+startup, so a bad value (e.g. `"XX"` as a restricted state, or a malformed blacklisted
+SSN) stops the app from booting instead of being silently ignored.
+
 **To add a new rule:** create a class implementing `IDenyRule` in `Domain/Rules`, then
-register it in `Program.cs`:
+register it in `AddApplication()` (`Application/ApplicationServiceCollectionExtensions.cs`):
 
 ```csharp
-builder.Services.AddScoped<IDenyRule, YourNewRule>();
+services.AddSingleton<IDenyRule, YourNewRule>();
 ```
 
 No existing rule, and nothing in `LoanRuleEngine`, needs to change.
+
+Which rules exist is deliberately a code decision, not configuration: an explicit
+registration is reviewed and compiler-checked, and a config typo can't silently turn
+off a lending rule. Only the data a rule uses (restricted states, blacklisted SSNs)
+is configurable. `DenyRuleRegistrationTests` guards the registered set and order.
+
+**Input normalization & validation.** The API rejects (400) a malformed SSN (9 digits,
+dashes optional, not starting with 9 — that range is for ITINs), a state that is not a
+US state or DC, and a ZIP that is not `#####` or `#####-####`. Before any rule runs,
+`LoanApplicationRequest.Normalized()` (called by the handler) upper-cases the state and
+strips the SSN to digits only, so the blacklist, the unique-SSN lookup, the database
+and the external service all see one canonical form.
 
 ## Returning customer & the transaction
 
@@ -154,7 +176,8 @@ not touching `SubmitLoanApplicationHandler`.
 - **SSN stored as plain text in SQLite.** A real system would encrypt or tokenize it
   at rest; left as-is here so the persistence layer stays focused on the actual
   exercise (transactional outbox + returning-customer logic).
-- **No automated frontend tests.** The backend's `Api.Tests` suite already exercises
-  the exact HTTP contract the UI depends on (approved / denied-NY / denied-blacklist /
-  returning-customer); the UI itself was verified manually rather than with, say,
-  Playwright, to keep the test surface proportional to the size of the frontend.
+- **Frontend tests are narrow.** Jest + React Testing Library cover the formatters,
+  the validation schema and the form component; Playwright covers the main flows in a
+  real browser, but with the backend mocked at the network layer. There is no
+  automated test of frontend + real backend together — the backend's `Api.Tests`
+  suite covers the HTTP contract on its side, and the full stack was verified by hand.
