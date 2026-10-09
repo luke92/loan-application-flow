@@ -70,6 +70,19 @@ stop all three.
 Requires the same prerequisites as running locally: the .NET SDK and Node.js/npm on
 your `PATH`.
 
+### Option C — `run.ps1` (Windows, no Docker)
+
+```powershell
+.\run.ps1
+```
+
+Same idea as `run.sh`, for Windows PowerShell. Needs the **.NET 10 SDK** and
+Node.js/npm (`winget install Microsoft.DotNet.SDK.10 OpenJS.NodeJS.LTS`). It installs
+`node_modules` on first run, creates `frontend/.env.local` if missing, and opens each
+service (backend, mock, frontend) in its own PowerShell window. Press `Ctrl+C` in the
+launching window to stop all three. If PowerShell blocks the script, run
+`powershell -ExecutionPolicy Bypass -File .\run.ps1`.
+
 ## Running locally
 
 If you'd rather run (or restart) just one part on its own, here's each command by

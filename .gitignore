@@ -316,3 +316,8 @@ FodyWeavers.xsd
 # local env files
 .env*.local
 .env
+
+# SQLite runtime database
+*.db
+*.db-shm
+*.db-wal
