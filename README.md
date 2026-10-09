@@ -1,6 +1,8 @@
 # Loan Application Flow
 
-> Demo video: `<PUBLIC_LINK>`
+> Demo video: 
+https://github.com/user-attachments/assets/22d69de6-f531-4913-b28e-fe12ff60a900
+
 
 A small loan application flow: a Next.js form submits to a .NET API, a rule engine
 decides approve/deny, approved applications are persisted (with a returning-customer
