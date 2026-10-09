@@ -54,7 +54,7 @@ public class OutboxProcessorTests : IDisposable
             NullLogger<OutboxProcessor>.Instance);
 
         await processor.StartAsync(CancellationToken.None);
-        await WaitUntilAsync(() => externalService.CallCount >= 1);
+        await WaitForMessageStatusAsync(provider, OutboxMessageStatus.Processed);
         await processor.StopAsync(CancellationToken.None);
 
         using var assertScope = provider.CreateScope();
@@ -86,7 +86,7 @@ public class OutboxProcessorTests : IDisposable
             NullLogger<OutboxProcessor>.Instance);
 
         await processor.StartAsync(CancellationToken.None);
-        await WaitUntilAsync(() => externalService.CallCount >= 2, TimeSpan.FromSeconds(10));
+        await WaitForMessageStatusAsync(provider, OutboxMessageStatus.Failed, TimeSpan.FromSeconds(10));
         await processor.StopAsync(CancellationToken.None);
 
         using var assertScope = provider.CreateScope();
@@ -97,11 +97,23 @@ public class OutboxProcessorTests : IDisposable
         Assert.Equal(2, message.Attempts);
     }
 
-    private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan? timeout = null)
+    // Wait for the persisted outcome, not for the external call: the status is saved after
+    // the call returns, and stopping the processor in between would cancel that save.
+    private static async Task WaitForMessageStatusAsync(
+        IServiceProvider provider,
+        OutboxMessageStatus expected,
+        TimeSpan? timeout = null)
     {
-        var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(5));
-        while (!condition() && DateTime.UtcNow < deadline)
+        var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(10));
+        while (DateTime.UtcNow < deadline)
         {
+            using var scope = provider.CreateScope();
+            var context = scope.ServiceProvider.GetRequiredService<LoanDbContext>();
+            if (await context.OutboxMessages.AnyAsync(message => message.Status == expected))
+            {
+                return;
+            }
+
             await Task.Delay(50);
         }
     }
