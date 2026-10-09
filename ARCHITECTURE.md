@@ -167,6 +167,11 @@ not touching `SubmitLoanApplicationHandler`.
 - **No EF Core migrations.** `Database.EnsureCreated()` at startup instead. Fine for
   SQLite in a take-home; a real project would want migrations (and a review step for
   the generated SQL) in `Infrastructure`.
+- **No handling of concurrent submissions with the same new SSN.** The unique SSN index
+  guarantees there is never a duplicate customer, but if two requests for a brand-new
+  SSN race, the loser fails the insert and gets a generic `500`. A real system would
+  catch the `DbUpdateException` and retry as a returning customer; skipped here because
+  the window is tiny and the data stays consistent either way.
 - **No authentication.** Explicitly out of scope per the brief.
 - **Docker Compose builds production bundles, not dev servers.** `docker-compose.yml`
   runs `dotnet publish`, `next build`/`next start`, and the mock as-is — there's no
