@@ -1,14 +1,6 @@
-using Application.Abstractions;
-using Application.UseCases;
-using Domain.Blacklist;
-using Domain.RestrictedStates;
-using Domain.Rules;
-using Infrastructure.Blacklist;
-using Infrastructure.RestrictedStates;
-using Infrastructure.ExternalService;
-using Infrastructure.Outbox;
+using Application;
+using Infrastructure;
 using Infrastructure.Persistence;
-using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,41 +21,9 @@ builder.Services.AddCors(options =>
     });
 });
 
-var connectionString = builder.Configuration.GetConnectionString("Default");
-if (string.IsNullOrWhiteSpace(connectionString))
-{
-    throw new InvalidOperationException(
-        "Connection string 'ConnectionStrings:Default' is not configured.");
-}
-
-builder.Services.AddDbContext<LoanDbContext>(options =>
-    options.UseSqlite(connectionString));
-
-builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
-builder.Services.AddScoped<ILoanApplicationRepository, LoanApplicationRepository>();
-builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
-builder.Services.AddScoped<IOutboxWriter, OutboxWriter>();
-builder.Services.AddSingleton<IBlacklist, ConfigurationBlacklist>();
-builder.Services.AddSingleton<IRestrictedStates, ConfigurationRestrictedStates>();
-
-builder.Services.AddScoped<IDenyRule, RestrictedStateRule>();
-builder.Services.AddScoped<IDenyRule, BlacklistedSsnRule>();
-builder.Services.AddScoped<LoanRuleEngine>();
-
-builder.Services.AddScoped<SubmitLoanApplicationHandler>();
-
-builder.Services.Configure<OutboxProcessorOptions>(
-    builder.Configuration.GetSection(OutboxProcessorOptions.SectionName));
-builder.Services.AddHostedService<OutboxProcessor>();
-
-builder.Services.AddHttpClient<IExternalCustomerService, ExternalCustomerServiceClient>(client =>
-{
-    var baseUrl = builder.Configuration["ExternalService:BaseUrl"];
-    if (!string.IsNullOrWhiteSpace(baseUrl))
-    {
-        client.BaseAddress = new Uri(baseUrl);
-    }
-});
+builder.Services
+    .AddApplication()
+    .AddInfrastructure(builder.Configuration);
 
 var app = builder.Build();
 
