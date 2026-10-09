@@ -7,6 +7,8 @@ const SSN_REGEX = /^\d{3}-\d{2}-\d{4}$/;
 const STATE_REGEX = /^[A-Za-z]{2}$/;
 const ZIP_REGEX = /^\d{5}(-\d{4})?$/;
 
+export const SSN_ITIN_MESSAGE = messages.ssnItin;
+
 export const loanApplicationSchema = z.object({
   firstName: z.string().trim().min(1, messages.firstNameRequired),
   lastName: z.string().trim().min(1, messages.lastNameRequired),
@@ -30,7 +32,8 @@ export const loanApplicationSchema = z.object({
     .string()
     .trim()
     .min(1, messages.ssnRequired)
-    .regex(SSN_REGEX, messages.ssnInvalid),
+    .regex(SSN_REGEX, messages.ssnInvalid)
+    .refine((value) => !value.startsWith("9"), SSN_ITIN_MESSAGE),
 });
 
 export type LoanApplicationFormData = z.infer<typeof loanApplicationSchema>;

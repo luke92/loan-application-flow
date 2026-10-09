@@ -15,6 +15,7 @@ export function submitLoanApplication(
 ): Promise<SubmitLoanApplicationResponse> {
   return apiRequest("/api/applications", submitLoanApplicationResponseSchema, {
     method: "POST",
-    body: JSON.stringify(data),
+    // The form displays the SSN with dashes; the API receives digits only.
+    body: JSON.stringify({ ...data, ssn: data.ssn.replace(/\D/g, "") }),
   });
 }

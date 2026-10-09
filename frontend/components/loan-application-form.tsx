@@ -2,7 +2,7 @@
 
 import { useLoanApplicationForm } from "@/hooks/use-loan-application-form";
 import { FormField, inputClass } from "@/components/form-field";
-import { formatSSN } from "@/lib/format";
+import { formatSSN, formatZip } from "@/lib/format";
 import { US_STATES } from "@/lib/us-states";
 import { translations } from "@/lib/i18n/translations";
 
@@ -68,8 +68,10 @@ export function LoanApplicationForm() {
             <input
               className={inputClass(errors.zip)}
               placeholder="12345"
+              inputMode="numeric"
+              maxLength={10}
               value={formData.zip}
-              onChange={(e) => updateField("zip", e.target.value)}
+              onChange={(e) => updateField("zip", formatZip(e.target.value))}
             />
           </FormField>
         </div>

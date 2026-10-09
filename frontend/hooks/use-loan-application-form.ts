@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { submitLoanApplication } from "@/lib/api/applications/applications-api";
-import { validateForm, type FormErrors, type LoanApplicationFormData } from "@/lib/validation";
+import { SSN_ITIN_MESSAGE, validateForm, type FormErrors, type LoanApplicationFormData } from "@/lib/validation";
 import { translations } from "@/lib/i18n/translations";
 
 const initialFormData: LoanApplicationFormData = {
@@ -28,6 +28,16 @@ export function useLoanApplicationForm() {
     value: LoanApplicationFormData[K],
   ) {
     setFormData((prev) => ({ ...prev, [field]: value }));
+
+    // Flag an SSN starting with 9 (ITIN range) as soon as it's typed, instead of on submit.
+    if (field === "ssn") {
+      const startsWithNine = String(value).startsWith("9");
+      setErrors((prev) => {
+        if (startsWithNine) return { ...prev, ssn: SSN_ITIN_MESSAGE };
+        if (prev.ssn === SSN_ITIN_MESSAGE) return { ...prev, ssn: undefined };
+        return prev;
+      });
+    }
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
