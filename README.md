@@ -12,21 +12,21 @@ trade-offs made along the way.
 
 ## Stack
 
-- **Backend**: .NET (ASP.NET Core Web API) + EF Core + SQLite. Built and tested with
-  the .NET 10 SDK (satisfies the ".NET 8+" requirement — no 8-specific APIs are used).
+- **Backend**: .NET (ASP.NET Core Web API) + EF Core + SQLite. Targets .NET 10
+  (`net10.0`), so the .NET 10 SDK is required.
 - **Frontend**: Next.js (App Router) + TypeScript + Tailwind CSS.
 - **Mock external service**: Node + Express, in-memory store.
 
 ## Prerequisites
 
-- .NET 8+ SDK ([download](https://dotnet.microsoft.com/download))
-- Node.js 18+ and npm
+- .NET 10 SDK ([download](https://dotnet.microsoft.com/download))
+- Node.js 20+ and npm
 
 ## Running everything with one command
 
-Two options, both start the backend, the mock service, and the frontend together.
+Three options, all start the backend, the mock service, and the frontend together.
 Pick whichever fits what you're doing; the per-component commands further down are
-what both of them run under the hood.
+what the non-Docker ones run under the hood.
 
 ### Option A — Docker Compose
 
@@ -86,7 +86,7 @@ launching window to stop all three. If PowerShell blocks the script, run
 ## Running locally
 
 If you'd rather run (or restart) just one part on its own, here's each command by
-itself — this is what `run.sh` runs for you. In three separate terminals, in this
+itself — this is what `run.sh` / `run.ps1` run for you. In three separate terminals, in this
 order (the frontend and the outbox processor both expect the other two to be
 reachable, but nothing will crash if they aren't up yet — requests will just
 fail/retry):
@@ -119,7 +119,7 @@ returning customer).
 
 ```bash
 cd frontend
-cp .env.local.example .env.local
+cp .env.local.example .env.local   # Windows PowerShell: Copy-Item .env.local.example .env.local
 npm install
 npm run dev
 ```
@@ -134,7 +134,7 @@ dotnet test
 ```
 
 Runs all four test projects (`Domain.Tests`, `Application.Tests`,
-`Infrastructure.Tests`, `Api.Tests` — 39 tests total):
+`Infrastructure.Tests`, `Api.Tests` — 44 tests total):
 
 - **Domain.Tests** — rule engine: restricted states deny (configurable list,
   case-insensitive, message uses the full state name), blacklisted SSN denies, a valid
@@ -147,7 +147,8 @@ Runs all four test projects (`Domain.Tests`, `Application.Tests`,
   fake that mimics "staged until SaveChanges" semantics).
 - **Infrastructure.Tests** — the outbox processor (a successful delivery is marked
   `Processed`; a failing one retries and is marked `Failed` after the configured max
-  attempts), plus a transactionality test against a **real SQLite database**: a
+  attempts), the config-backed blacklist / restricted-states lookups, plus a
+  transactionality test against a **real SQLite database**: a
   Customer, a LoanApplication, and an OutboxMessage are staged in one
   `SaveChangesAsync` call alongside a second customer that violates the unique SSN
   index — the whole call throws `DbUpdateException`, and a follow-up query confirms
@@ -156,7 +157,8 @@ Runs all four test projects (`Domain.Tests`, `Application.Tests`,
   covering approved, denied (NY), denied (blacklist, with and without dashes), the
   returning-customer endpoint (same SSN with and without dashes → same customer), state
   stored upper-case regardless of input casing, and `400` for an invalid state, ZIP, or
-  SSN (wrong format or starting with 9).
+  SSN (wrong format or starting with 9), plus a check that the container registers
+  the expected deny rules in order.
 
 ### Frontend tests
 
@@ -190,18 +192,27 @@ entries and incoming SSNs are normalized, so dashes don't matter):
 | **Denied — blacklist** | `ssn: 777-77-7777` (any state other than NY). |
 | **Returning customer** | Submit the form twice with the **same SSN** (e.g. `123-45-6789`) but a different requested amount. Both responses return the same `applicationId`; the mock service receives a `POST /customers` on the first submission and a `PUT /customers/123456789` on the second (check `GET http://localhost:4000/customers`). |
 
-An SSN may not start with 9 (that range is reserved for ITINs): both the form and the API reject it.
+**Validation.** The API rejects with `400`:
 
-Field formats enforced on both the client and the server: SSN must match
-`###-##-####` in the form (which displays it with dashes but sends it to the API digits-only), state must be a 2-letter code, ZIP must be `#####` or `#####-####`.
-The server is more lenient/strict in two ways: it also accepts an SSN without dashes
-(`123456789`). SSNs are normalized to digits only (`123456789`) before the blacklist
-check, customer lookup, and persistence, so the database and the external service never
-see dashes, and it rejects state codes that aren't a real US state or DC (e.g. `ZZ`).
+- an SSN that isn't 9 digits (`###-##-####`, dashes optional) or that starts with 9
+  (reserved for ITINs);
+- a state that isn't a real US state or DC (case-insensitive, stored upper-case);
+- a ZIP that isn't `#####` or `#####-####`.
+
+The form applies the same rules and additionally formats the SSN with dashes and
+restricts the ZIP to digits while typing, but sends the SSN **digits-only**. The server
+normalizes the SSN to digits (`123456789`) before the blacklist check, customer lookup,
+and persistence, so the database and the external service never see dashes.
+
+**Configuration.** Both lists live in `backend/src/Api/appsettings.json`:
+`EligibilityRules:RestrictedStates` (default `["NY"]`) and `Blacklist:Ssns`.
 
 ## What's missing / known limitations
 
 - No authentication (explicitly out of scope).
 - No EF Core migrations (`Database.EnsureCreated()` instead).
-- No automated frontend tests (manual testing only — see
-  [`ARCHITECTURE.md`](./ARCHITECTURE.md)).
+- Frontend tests mock the backend; there is no automated test of frontend + real
+  backend together (see [`ARCHITECTURE.md`](./ARCHITECTURE.md)).
+- Two simultaneous submissions with the same brand-new SSN: the loser gets a `500`
+  (data stays consistent thanks to the unique index).
+- The Docker Compose setup is provided but was not run end to end in the final state.
