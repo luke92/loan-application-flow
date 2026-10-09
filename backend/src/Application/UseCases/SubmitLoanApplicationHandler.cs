@@ -32,6 +32,8 @@ public sealed class SubmitLoanApplicationHandler
         LoanApplicationRequest request,
         CancellationToken cancellationToken)
     {
+        request = request.Normalized();
+
         var decision = _ruleEngine.Decide(request);
         if (!decision.IsApproved)
         {

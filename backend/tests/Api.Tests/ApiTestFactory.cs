@@ -18,7 +18,7 @@ public sealed class ApiTestFactory : WebApplicationFactory<Program>
                 ["ConnectionStrings:Default"] = $"Data Source={DatabasePath}",
                 ["ExternalService:BaseUrl"] = "http://localhost:59999",
                 ["Outbox:PollingIntervalSeconds"] = "3600",
-                ["Blacklist:Ssns:0"] = "999-99-9999"
+                ["Blacklist:Ssns:0"] = "777-77-7777"
             });
         });
     }

@@ -2,17 +2,28 @@ using Application.UseCases;
 using Domain;
 using Domain.Blacklist;
 using Domain.Events;
+using Domain.RestrictedStates;
 using Domain.Rules;
 
 namespace Application.Tests;
 
 public class SubmitLoanApplicationHandlerTests
 {
-    private const string BlacklistedSsn = "999-99-9999";
+    private const string BlacklistedSsn = "777-77-7777";
 
     private sealed class FakeBlacklist : IBlacklist
     {
         public bool Contains(string ssn) => ssn == BlacklistedSsn;
+    }
+
+    private sealed class FakeRestrictedStates : IRestrictedStates
+    {
+        private readonly HashSet<string> _states;
+
+        public FakeRestrictedStates(params string[] states) =>
+            _states = new HashSet<string>(states, StringComparer.OrdinalIgnoreCase);
+
+        public bool Contains(string state) => _states.Contains(state);
     }
 
     private static LoanApplicationRequest ValidRequest(
@@ -32,11 +43,24 @@ public class SubmitLoanApplicationHandlerTests
 
     private static SubmitLoanApplicationHandler CreateHandler(FakeDataStore store) =>
         new(
-            new LoanRuleEngine(new IDenyRule[] { new StateIsNewYorkRule(), new BlacklistedSsnRule(new FakeBlacklist()) }),
+            new LoanRuleEngine(new IDenyRule[] { new RestrictedStateRule(new FakeRestrictedStates("NY")), new BlacklistedSsnRule(new FakeBlacklist()) }),
             store,
             store,
             store,
             store);
+
+    [Fact]
+    public async Task HandleAsync_WhenStateAndSsnAreNotCanonical_StoresThemNormalized()
+    {
+        var store = new FakeDataStore();
+        var handler = CreateHandler(store);
+
+        await handler.HandleAsync(ValidRequest(state: "ca", ssn: "123-45-6789"), CancellationToken.None);
+
+        var customer = Assert.Single(store.Customers);
+        Assert.Equal("CA", customer.State);
+        Assert.Equal("123456789", customer.Ssn);
+    }
 
     [Fact]
     public async Task HandleAsync_WhenNewCustomer_CreatesCustomerAndApplicationAndEnqueuesCreatedEvent()

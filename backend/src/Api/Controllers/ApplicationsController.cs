@@ -26,7 +26,7 @@ public sealed class ApplicationsController : ControllerBase
             request.LastName,
             request.Street,
             request.City,
-            request.State.ToUpperInvariant(),
+            request.State,
             request.Zip,
             request.CompanyName,
             request.RequestedAmount,

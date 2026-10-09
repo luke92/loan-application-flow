@@ -1,4 +1,5 @@
 using Domain.Blacklist;
+using Domain.RestrictedStates;
 using Domain.Rules;
 
 namespace Domain.Tests;
@@ -26,6 +27,16 @@ public class LoanRuleEngineTests
         public bool Contains(string ssn) => _ssns.Contains(ssn);
     }
 
+    private sealed class FakeRestrictedStates : IRestrictedStates
+    {
+        private readonly HashSet<string> _states;
+
+        public FakeRestrictedStates(params string[] states) =>
+            _states = new HashSet<string>(states, StringComparer.OrdinalIgnoreCase);
+
+        public bool Contains(string state) => _states.Contains(state);
+    }
+
     private sealed class NeverDenyRule : IDenyRule
     {
         public DenyReason? Evaluate(LoanApplicationRequest request) => null;
@@ -36,7 +47,7 @@ public class LoanRuleEngineTests
     {
         var engine = new LoanRuleEngine(new IDenyRule[]
         {
-            new StateIsNewYorkRule(),
+            new RestrictedStateRule(new FakeRestrictedStates("NY")),
             new BlacklistedSsnRule(new FakeBlacklist())
         });
 
@@ -47,12 +58,34 @@ public class LoanRuleEngineTests
     }
 
     [Fact]
-    public void Decide_WhenSsnIsBlacklisted_Denies()
+    public void Decide_WhenStateIsInConfiguredList_Denies()
     {
-        var blacklistedSsn = "999-99-9999";
         var engine = new LoanRuleEngine(new IDenyRule[]
         {
-            new StateIsNewYorkRule(),
+            new RestrictedStateRule(new FakeRestrictedStates("NY", "fl"))
+        });
+
+        Assert.False(engine.Decide(ValidRequest(state: "FL")).IsApproved);
+        Assert.False(engine.Decide(ValidRequest(state: "ny")).IsApproved);
+        Assert.True(engine.Decide(ValidRequest(state: "CA")).IsApproved);
+    }
+
+    [Fact]
+    public void Decide_WhenStateIsDenied_MessageUsesFullStateName()
+    {
+        var engine = new LoanRuleEngine(new IDenyRule[] { new RestrictedStateRule(new FakeRestrictedStates("NY", "ZZ")) });
+
+        Assert.Contains("New York", engine.Decide(ValidRequest(state: "ny")).Reason!.Message);
+        Assert.Contains("ZZ", engine.Decide(ValidRequest(state: "zz")).Reason!.Message);
+    }
+
+    [Fact]
+    public void Decide_WhenSsnIsBlacklisted_Denies()
+    {
+        var blacklistedSsn = "777-77-7777";
+        var engine = new LoanRuleEngine(new IDenyRule[]
+        {
+            new RestrictedStateRule(new FakeRestrictedStates("NY")),
             new BlacklistedSsnRule(new FakeBlacklist(blacklistedSsn))
         });
 
@@ -67,8 +100,8 @@ public class LoanRuleEngineTests
     {
         var engine = new LoanRuleEngine(new IDenyRule[]
         {
-            new StateIsNewYorkRule(),
-            new BlacklistedSsnRule(new FakeBlacklist("999-99-9999"))
+            new RestrictedStateRule(new FakeRestrictedStates("NY")),
+            new BlacklistedSsnRule(new FakeBlacklist("777-77-7777"))
         });
 
         var decision = engine.Decide(ValidRequest());
@@ -80,10 +113,10 @@ public class LoanRuleEngineTests
     [Fact]
     public void Decide_WhenNewRuleIsAdded_ExistingRulesStillEvaluateCorrectly()
     {
-        var blacklistedSsn = "999-99-9999";
+        var blacklistedSsn = "777-77-7777";
         var engine = new LoanRuleEngine(new IDenyRule[]
         {
-            new StateIsNewYorkRule(),
+            new RestrictedStateRule(new FakeRestrictedStates("NY")),
             new BlacklistedSsnRule(new FakeBlacklist(blacklistedSsn)),
             new NeverDenyRule()
         });

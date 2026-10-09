@@ -17,10 +17,11 @@ public sealed class SubmitLoanApplicationRequest
     public string City { get; set; } = string.Empty;
 
     [Required]
-    [RegularExpression("^[A-Za-z]{2}$", ErrorMessage = "State must be a 2-letter code.")]
+    [ValidUsState]
     public string State { get; set; } = string.Empty;
 
     [Required]
+    [RegularExpression(@"^\d{5}(-\d{4})?$", ErrorMessage = "ZIP must match ##### or #####-####.")]
     public string Zip { get; set; } = string.Empty;
 
     [Required]
@@ -30,6 +31,7 @@ public sealed class SubmitLoanApplicationRequest
     public decimal RequestedAmount { get; set; }
 
     [Required]
-    [RegularExpression(@"^\d{3}-\d{2}-\d{4}$", ErrorMessage = "SSN must match ###-##-####.")]
+    [RegularExpression(@"^\d{3}-?\d{2}-?\d{4}$", ErrorMessage = "SSN must match ###-##-#### (dashes optional).")]
+    [ValidSsn]
     public string Ssn { get; set; } = string.Empty;
 }
