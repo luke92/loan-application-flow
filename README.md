@@ -134,11 +134,14 @@ dotnet test
 ```
 
 Runs all four test projects (`Domain.Tests`, `Application.Tests`,
-`Infrastructure.Tests`, `Api.Tests` — 15 tests total):
+`Infrastructure.Tests`, `Api.Tests` — 39 tests total):
 
-- **Domain.Tests** — rule engine: NY denies, blacklisted SSN denies, a valid
-  application approves, and a newly-added rule doesn't break the existing ones.
-- **Application.Tests** — the use case: new customer, returning customer (same SSN
+- **Domain.Tests** — rule engine: restricted states deny (configurable list,
+  case-insensitive, message uses the full state name), blacklisted SSN denies, a valid
+  application approves, and a newly-added rule doesn't break the existing ones; plus
+  SSN normalization (digits only) and validity (9 digits, not starting with 9).
+- **Application.Tests** — the use case: state/SSN are stored normalized (upper-case
+  state, digits-only SSN), new customer, returning customer (same SSN
   twice → one customer, one application, `Updated` event), a denied request persists
   nothing, and a simulated save failure rolls everything back (against an in-memory
   fake that mimics "staged until SaveChanges" semantics).
@@ -150,28 +153,51 @@ Runs all four test projects (`Domain.Tests`, `Application.Tests`,
   index — the whole call throws `DbUpdateException`, and a follow-up query confirms
   nothing from that call was persisted, not even the otherwise-valid rows.
 - **Api.Tests** — `WebApplicationFactory` + a real (temp-file) SQLite database,
-  covering approved, denied (NY), denied (blacklist), and the returning-customer
-  endpoint.
+  covering approved, denied (NY), denied (blacklist, with and without dashes), the
+  returning-customer endpoint (same SSN with and without dashes → same customer), state
+  stored upper-case regardless of input casing, and `400` for an invalid state, ZIP, or
+  SSN (wrong format or starting with 9).
 
-The frontend has no automated tests — see the trade-offs section in
-[`ARCHITECTURE.md`](./ARCHITECTURE.md).
+### Frontend tests
+
+```bash
+cd frontend
+npm test            # Jest + React Testing Library (unit + component)
+npm run test:e2e    # Playwright (end-to-end in a real browser)
+```
+
+- **Jest** (`npm test`, 44 tests) — `formatSSN` / `formatZip`, the validation schema
+  (including the SSN-can't-start-with-9 rule), and the form component: live formatting,
+  immediate ITIN error, digits-only ZIP, validation on submit, digits-only SSN in the API
+  payload, and the approved / denied / network-error flows.
+- **Playwright** (`npm run test:e2e`, 6 tests) — drives the real form in Chromium, with
+  the backend mocked at the network layer, so only the frontend is needed (it starts
+  `npm run dev` itself, or reuses one already running on port 3000). First time only:
+  `npx playwright install chromium`.
 
 ## Test data
 
-Blacklisted SSNs (`backend/src/Api/appsettings.json` → `Blacklist:Ssns`):
+Blacklisted SSNs (`backend/src/Api/appsettings.json` → `Blacklist:Ssns`, stored digits-only;
+entries and incoming SSNs are normalized, so dashes don't matter):
 
-- `999-99-9999`
+- `777-77-7777`
 - `888-88-8888`
 
 | Scenario | What to enter |
 |---|---|
 | **Approved** | Any valid data with `state` ≠ `NY` and an SSN that isn't blacklisted, e.g. state `CA`, SSN `123-45-6789`. |
 | **Denied — New York** | `state: NY` (any SSN). |
-| **Denied — blacklist** | `ssn: 999-99-9999` (any state other than NY). |
-| **Returning customer** | Submit the form twice with the **same SSN** (e.g. `123-45-6789`) but a different requested amount. Both responses return the same `applicationId`; the mock service receives a `POST /customers` on the first submission and a `PUT /customers/123-45-6789` on the second (check `GET http://localhost:4000/customers`). |
+| **Denied — blacklist** | `ssn: 777-77-7777` (any state other than NY). |
+| **Returning customer** | Submit the form twice with the **same SSN** (e.g. `123-45-6789`) but a different requested amount. Both responses return the same `applicationId`; the mock service receives a `POST /customers` on the first submission and a `PUT /customers/123456789` on the second (check `GET http://localhost:4000/customers`). |
+
+An SSN may not start with 9 (that range is reserved for ITINs): both the form and the API reject it.
 
 Field formats enforced on both the client and the server: SSN must match
-`###-##-####`, state must be a 2-letter code.
+`###-##-####` in the form (which displays it with dashes but sends it to the API digits-only), state must be a 2-letter code, ZIP must be `#####` or `#####-####`.
+The server is more lenient/strict in two ways: it also accepts an SSN without dashes
+(`123456789`). SSNs are normalized to digits only (`123456789`) before the blacklist
+check, customer lookup, and persistence, so the database and the external service never
+see dashes, and it rejects state codes that aren't a real US state or DC (e.g. `ZZ`).
 
 ## What's missing / known limitations
 
