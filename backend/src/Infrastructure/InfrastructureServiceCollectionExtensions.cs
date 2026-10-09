@@ -18,14 +18,21 @@ public static class InfrastructureServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("Default");
-        if (string.IsNullOrWhiteSpace(connectionString))
+        // Read lazily (not here) so configuration overrides applied after service
+        // registration, e.g. by WebApplicationFactory in tests, are honored.
+        services.AddDbContext<LoanDbContext>((serviceProvider, options) =>
         {
-            throw new InvalidOperationException(
-                "Connection string 'ConnectionStrings:Default' is not configured.");
-        }
+            var connectionString = serviceProvider
+                .GetRequiredService<IConfiguration>()
+                .GetConnectionString("Default");
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                throw new InvalidOperationException(
+                    "Connection string 'ConnectionStrings:Default' is not configured.");
+            }
 
-        services.AddDbContext<LoanDbContext>(options => options.UseSqlite(connectionString));
+            options.UseSqlite(connectionString);
+        });
 
         services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<ILoanApplicationRepository, LoanApplicationRepository>();
