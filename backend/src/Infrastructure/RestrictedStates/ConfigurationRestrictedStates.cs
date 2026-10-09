@@ -1,5 +1,5 @@
 using Domain.RestrictedStates;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 
 namespace Infrastructure.RestrictedStates;
 
@@ -7,11 +7,10 @@ public sealed class ConfigurationRestrictedStates : IRestrictedStates
 {
     private readonly HashSet<string> _states;
 
-    public ConfigurationRestrictedStates(IConfiguration configuration)
+    public ConfigurationRestrictedStates(IOptions<EligibilityRulesOptions> options)
     {
         _states = new HashSet<string>(
-            (configuration.GetSection("EligibilityRules:RestrictedStates").Get<string[]>() ?? Array.Empty<string>())
-                .Select(s => s.Trim()),
+            options.Value.RestrictedStates.Select(s => s.Trim()),
             StringComparer.OrdinalIgnoreCase);
     }
 
