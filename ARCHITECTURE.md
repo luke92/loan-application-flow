@@ -63,9 +63,7 @@ Current rules (`Domain/Rules`):
 - `BlacklistedSsnRule` — denies when the SSN is in `IBlacklist`, implemented by
   `ConfigurationBlacklist` (reads `Blacklist:Ssns` from configuration).
 
-Both read typed options (`BlacklistOptions`, `EligibilityRulesOptions`) validated on
-startup, so a bad value (e.g. `"XX"` as a restricted state, or a malformed blacklisted
-SSN) stops the app from booting instead of being silently ignored.
+Both read typed options (`BlacklistOptions`, `EligibilityRulesOptions`).
 
 **To add a new rule:** create a class implementing `IDenyRule` in `Domain/Rules`, then
 register it in `AddApplication()` (`Application/ApplicationServiceCollectionExtensions.cs`):
